@@ -11,6 +11,7 @@ export class Scene extends Phaser.Scene {
     preload() {
         const bg = this.load.image("background", "public/lands.png")
         const char = this.load.image("character", "public/character.png")
+        const music = this.load.audio("bg", "public/bg.mp3")
 
     }
     create() {
@@ -22,14 +23,16 @@ export class Scene extends Phaser.Scene {
         this.char.setPosition(w / 2, h / 2)
         this.char.setScale(0.2)
         bgs.setPosition(900, 700)
+        const music = this.sound.add("bg", { loop: true, volume: 0.2 })
 
-        //  WASD controls
         this.keys = this.input.keyboard.addKeys({
             w: Phaser.Input.Keyboard.KeyCodes.W,
             s: Phaser.Input.Keyboard.KeyCodes.S,
             a: Phaser.Input.Keyboard.KeyCodes.A,
             d: Phaser.Input.Keyboard.KeyCodes.D
         });
+        music.play()
+
     }
     update() {
         const speed = 150;
