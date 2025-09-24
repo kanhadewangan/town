@@ -90,9 +90,9 @@
 
 
         update() {
+            if (!this.char) return;
             const speed = 150;
             this.char.setVelocity(0);
-            if (!this.char) return;
 
             // Store previous position for tracking
             const prevX = this.char.x;
