@@ -1,3 +1,15 @@
+// Socket.IO connection using global io object from CDN
+const socket = io("http://localhost:3000", {
+    auth: {
+        token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7InVzZXJuYW1lIjoidXNlcjEiLCJpZCI6MX0sImlhdCI6MTc1ODgyMjMwNCwiZXhwIjoxNzU4ODI1OTA0fQ.KrcHs1Aj1z_HnXNfWBWVVhSR_Ug1CO4aMI8CH5y4Qok"
+    }
+});
+const moves = io("http://localhost:3000/moves", {
+    auth: {
+        token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7InVzZXJuYW1lIjoidXNlcjEiLCJpZCI6MX0sImlhdCI6MTc1ODgyMjMwNCwiZXhwIjoxNzU4ODI1OTA0fQ.KrcHs1Aj1z_HnXNfWBWVVhSR_Ug1CO4aMI8CH5y4Qok"
+    }
+});
+
 export class Scene extends Phaser.Scene {
     constructor() {
         super({ key: "Scene" });
@@ -34,13 +46,25 @@ export class Scene extends Phaser.Scene {
         this.load.image("character3", "public/character3.png");
         this.load.image("character4", "public/character4.png");
         this.load.image("character5", "public/character5.png");
+
     }
 
 
     create() {
         const h = this.scale.height;
         const w = this.scale.width;
+            socket.on("connect", () => {
+                console.log("Connected to server with ID: " + socket.id);
+            });
 
+        socket.on("initialPos", (data) => {
+            console.log("Initial position data received:", data);
+        });
+        socket.on("disconnect", () => {
+            console.log("Disconnected from server");
+        });
+
+        
         // Background - centered and scaled to fit screen
         const background = this.add.image(w / 2, h / 2, "background");
         background.setDisplaySize(w, h); // Scale to match screen size
@@ -92,10 +116,10 @@ export class Scene extends Phaser.Scene {
     }
 
 
-        update() {
-            if (!this.char) return;
-            const speed = 150;
-            this.char.setVelocity(0);
+    update() {
+        if (!this.char) return;
+        const speed = 150;
+        this.char.setVelocity(0);
 
         // Store previous position for tracking
         const prevX = this.char.x;
@@ -134,10 +158,14 @@ export class Scene extends Phaser.Scene {
         const frameDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
         this.totalDistance += frameDistance;
 
-        // Print movement tracking info (only when moving)
+
+        moves.on("connect",()=>{
+            console.log("Connected to /moves with ID: " + moves.id);
+        })
         if (directions.length > 0) {
             console.log("=== MOVEMENT TRACKING ===");
             console.log(`Position: X=${Math.round(this.char.x)}, Y=${Math.round(this.char.y)}`);
+            moves.emit("move",{"Position: X":Math.round(this.char.x),"Y":Math.round(this.char.y)});
             console.log(`Velocity: X=${this.char.body.velocity.x}, Y=${this.char.body.velocity.y}`);
             console.log(`Direction: ${this.currentDirection}`);
             console.log(`Distance this frame: ${frameDistance.toFixed(2)}`);
