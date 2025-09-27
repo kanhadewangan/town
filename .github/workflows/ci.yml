@@ -27,7 +27,7 @@ jobs:
      
       
       - name: Docker Build
-        run: docker build -t  games:${{ github.sha }} .
+        run: docker build -t  games:${{ github.sha }}. .
       - name: Docker Push
-        run: docker push games:${{ github.sha }}
+        run: docker push  ${{ secrets.DOCKER_USERNAME }}/games:${{ github.sha }}
      
