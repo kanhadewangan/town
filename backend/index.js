@@ -2,83 +2,88 @@
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
 
-dotenv.config();
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server,{
+const io = new Server(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
     }
 });
 
-
-const onlineUser = new Map();
-
-io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (token) {
-        jwt.verify(token, process.env.JWT_TOKEN || "default_token", (err, decoded) => {
-            if (err) {
-                next(new Error("invalid token"));
-            } else {
-                socket.user = decoded;
-                next();
-            }
-        });
-    }
-    else {
-        next(new Error("invalid token"));
-    }
-})
-
+// Store all connected players
+const players = new Map();
 
 io.on("connection", (socket) => {
-    console.log("a user connected");
-    onlineUser.set(socket.id, {username:socket.user.username, id: socket.id});
-    console.log("Online users: ", Array.from(onlineUser.values()));
-    socket.on("chat", (msg, cb) => {
-        if (!msg || msg.trim() === "") return;
-        io.emit("chat", msg);
-        cb({"msg":"message received"});
+    console.log(`Player connected: ${socket.id}`);
+    socket.join('game');
+    // Generate a random starting position
+    const startingPosition = {
+        x: Math.random() * 1800 + 100, // Random x between 100-1900
+        y: Math.random() * 900 + 100   // Random y between 100-1000
+    };
+    
+    // Create new player object
+    const newPlayer = {
+        id: socket.id,
+        x: startingPosition.x,
+        y: startingPosition.y,
+        character: `character${(players.size % 5) + 1}` // Cycle through character1-5
+    };
+    
+    // Add player to our players map
+    players.set(socket.id, newPlayer);
+    
+    // Send the new player their initial data
+    socket.emit("playerJoined", {
+        playerId: socket.id,
+        playerData: newPlayer,
+        allPlayers: Array.from(players.values())
     });
- 
-    io.of("/initiaPos").on("connection",(socket)=>{
-        console.log("a user connected to /initiaPos");
-        socket.on("initialPos",(data,cb)=>{
-            if(!data) return;
-            io.of("/initiaPos").emit("initialPos",data);
-            cb({msg:"initial position received","data are":data});
-        });
-        socket.on("moves",(data,cb)=>{
-            socket.emit("moves",data);
-            cb({msg:"moves received","data are":data});
-        })
+    
+    // Tell all other players about the new player
+    socket.broadcast.emit("newPlayer", newPlayer);
+    
+    // Send all existing players to the new player
+    socket.emit("existingPlayers", Array.from(players.values()));
+    
+    // Handle player movement
+    socket.on("playerMove", (data) => {
+        if (players.has(socket.id)) {
+            // Update player position in server
+            const player = players.get(socket.id);
+            player.x = data.x;
+            player.y = data.y;
+            
+            // Broadcast movement to all other players in the game room
+            socket.emit("playerMoved", {
+                playerId: socket.id,
+                x: data.x,
+                y: data.y,
+                character: player.character
+            });
+            
+        }
     });
-
-    io.of("/moves").on("connection", (socket) => {
-        console.log("a user connected to /moves");
-        socket.on("move", (data) => {
-            if (!data) return;
-            console.log(data)
-            io.of("/moves").emit("move", data);
-        });
-
-    });
+    
+    // Handle player disconnect
     socket.on("disconnect", () => {
-        console.log("user disconnected");
-        onlineUser.delete(socket.id,{username:socket.user.username, id: socket.id});
+        console.log(`Player disconnected: ${socket.id}`);
+        
+        // Remove player from players map
+        players.delete(socket.id);
+        
+        // Tell all other players this player left
+        socket.broadcast.emit("playerLeft", socket.id);
     });
 });
 
 app.get('/', (req, res) => {
-    res.send('<h1>Hello world</h1>');
+    res.send('<h1>Multiplayer Game Server</h1>');
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`listening on *:${PORT}`);
+    console.log(`Multiplayer server listening on *:${PORT}`);
 });
