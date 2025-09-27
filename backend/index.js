@@ -14,10 +14,15 @@ const io = new Server(server, {
 
 // Store all connected players
 const players = new Map();
+const GAME_ROOM = 'main-game-room'; // Single consistent room name
 
 io.on("connection", (socket) => {
-    console.log(`Player connected: ${socket.id}`);
-    socket.join('game');
+    console.log(`🔌 Player connected: ${socket.id}`);
+    
+    // Join the main game room - ALL players join the same room
+    socket.join(GAME_ROOM);
+    console.log(`🏠 Player ${socket.id} joined room: ${GAME_ROOM}`);
+    
     // Generate a random starting position
     const startingPosition = {
         x: Math.random() * 1800 + 100, // Random x between 100-1900
@@ -29,24 +34,27 @@ io.on("connection", (socket) => {
         id: socket.id,
         x: startingPosition.x,
         y: startingPosition.y,
-        character: `character${(players.size % 5) + 1}` // Cycle through character1-5
+        character: `character${(players.size % 5) + 1}`, // Cycle through character1-5
+        room: GAME_ROOM
     };
     
     // Add player to our players map
     players.set(socket.id, newPlayer);
     
+    console.log(`👥 Total players in game: ${players.size}`);
+    
     // Send the new player their initial data
     socket.emit("playerJoined", {
         playerId: socket.id,
         playerData: newPlayer,
-        allPlayers: Array.from(players.values())
+        allPlayers: Array.from(players.values()),
+        roomName: GAME_ROOM
     });
     
-    // Tell all other players about the new player
-    socket.broadcast.emit("newPlayer", newPlayer);
+    // Tell all OTHER players in the same room about the new player
+    socket.to(GAME_ROOM).emit("newPlayer", newPlayer);
     
-    // Send all existing players to the new player
-    socket.emit("existingPlayers", Array.from(players.values()));
+    console.log(`📢 Broadcasted new player ${socket.id} to room ${GAME_ROOM}`);
     
     // Handle player movement
     socket.on("playerMove", (data) => {
@@ -56,26 +64,44 @@ io.on("connection", (socket) => {
             player.x = data.x;
             player.y = data.y;
             
-            // Broadcast movement to all other players in the game room
-            socket.emit("playerMoved", {
+            // Broadcast movement to ALL OTHER players in the same room
+            socket.to(GAME_ROOM).emit("playerMoved", {
                 playerId: socket.id,
                 x: data.x,
                 y: data.y,
                 character: player.character
             });
             
+            console.log(`🚶 Player ${socket.id.substr(0,6)} moved to (${Math.round(data.x)}, ${Math.round(data.y)}) - broadcasted to room ${GAME_ROOM}`);
         }
+    });
+    
+    // Debug: Get room status (optional - for debugging)
+    socket.on("getRoomStatus", () => {
+        const roomInfo = io.sockets.adapter.rooms.get(GAME_ROOM);
+        const playersInRoom = roomInfo ? roomInfo.size : 0;
+        
+        socket.emit("roomStatus", {
+            roomName: GAME_ROOM,
+            playersInRoom: playersInRoom,
+            totalPlayersTracked: players.size,
+            playersList: Array.from(players.keys()).map(id => id.substr(0, 6))
+        });
+        
+        console.log(`📊 Room ${GAME_ROOM}: ${playersInRoom} connected, ${players.size} tracked`);
     });
     
     // Handle player disconnect
     socket.on("disconnect", () => {
-        console.log(`Player disconnected: ${socket.id}`);
+        console.log(`❌ Player disconnected: ${socket.id}`);
         
         // Remove player from players map
         players.delete(socket.id);
+        console.log(`👥 Remaining players: ${players.size}`);
         
-        // Tell all other players this player left
-        socket.broadcast.emit("playerLeft", socket.id);
+        // Tell all other players in the room that this player left
+        socket.to(GAME_ROOM).emit("playerLeft", socket.id);
+        console.log(`📢 Broadcasted player left ${socket.id} to room ${GAME_ROOM}`);
     });
 });
 

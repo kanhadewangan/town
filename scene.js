@@ -79,7 +79,17 @@ export class Scene extends Phaser.Scene {
     setupSocketListeners() {
         // Debug socket connection
         socket.on("connect", () => {
-            console.log("✅ Socket connected", "with ID:", socket.id);
+            console.log("✅ Socket connected with ID:", socket.id);
+            
+            // Request room status for debugging
+            setTimeout(() => {
+                socket.emit("getRoomStatus");
+            }, 1000);
+        });
+        
+        // Room status response (for debugging)
+        socket.on("roomStatus", (data) => {
+            console.log("📊 Room Status:", data);
         });
 
         socket.on("disconnect", () => {
@@ -89,6 +99,9 @@ export class Scene extends Phaser.Scene {
         // When we join the game
         socket.on("playerJoined", (data) => {
             console.log("🎮 I joined the game!", data);
+            console.log(`🏠 Joined room: ${data.roomName || 'unknown'}`);
+            console.log(`👥 Total players in game: ${data.allPlayers.length}`);
+            
             this.myPlayerId = data.playerId;
             
             // Create my character
@@ -96,22 +109,24 @@ export class Scene extends Phaser.Scene {
             this.myPlayer.setScale(0.2);
             this.myPlayer.setCollideWorldBounds(true);
             
+            console.log(`✅ My player created: ${data.playerData.character} at (${Math.round(data.playerData.x)}, ${Math.round(data.playerData.y)})`);
             
             // Make camera follow my character
             this.cameras.main.startFollow(this.myPlayer);
             this.cameras.main.setBounds(0, 0, this.scale.width, this.scale.height);
             
-            // Add all existing players
-            data.allPlayers.forEach(playerData => {
-                if (playerData.id !== this.myPlayerId) {
-                    this.addOtherPlayer(playerData);
-                }
+            // Add all existing players (excluding myself)
+            const otherPlayers = data.allPlayers.filter(p => p.id !== this.myPlayerId);
+            console.log(`🔄 Adding ${otherPlayers.length} existing players`);
+            
+            otherPlayers.forEach(playerData => {
+                this.addOtherPlayer(playerData);
             });
         });
 
         // When a new player joins
         socket.on("newPlayer", (playerData) => {
-            console.log("New player joined:", playerData);
+            console.log("🆕 New player joined:", playerData.id.substr(0,6), playerData.character);
             this.addOtherPlayer(playerData);
         });
 
@@ -184,8 +199,14 @@ export class Scene extends Phaser.Scene {
                 this.players.delete(playerId);
             }
         });
+        if(socket.id === undefined){{
+            this.players.forEach((player, playerId) => {
+                player.destroy();
+                this.players.delete(playerId);
+            });
+        }
     }
-
+    }
     addOtherPlayer(playerData) {
         // Create sprite for other player
         const otherPlayer = this.physics.add.sprite(playerData.x, playerData.y, playerData.character);
