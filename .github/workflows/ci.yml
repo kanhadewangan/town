@@ -18,13 +18,16 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Install dependencies
         run: npm install
 
      
       
       - name: Docker Build
-        run: docker build -t my-app:${{ github.sha }} .
+        run: docker build -t  games:${{ github.sha }} .
       - name: Docker Push
-        run: docker push my-app:${{ github.sha }}
+        run: docker push games:${{ github.sha }}
      
