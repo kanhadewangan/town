@@ -19,3 +19,4 @@ services:
       - game_data:/app/data
 volumes:
   game_data:
+       
