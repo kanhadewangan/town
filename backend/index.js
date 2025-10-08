@@ -56,6 +56,16 @@ io.on("connection", (socket) => {
     
     console.log(`📢 Broadcasted new player ${socket.id} to room ${GAME_ROOM}`);
     
+    // Announce to everyone in the room that a player joined (includes the new player)
+    io.in(GAME_ROOM).emit("announce", {
+        type: "join",
+        playerId: socket.id,
+        message: `Player ${socket.id.substr(0,6)} joined the room`
+    });
+    
+    // Also send explicit existingPlayers event (help clients that listen for it)
+    socket.emit("existingPlayers", Array.from(players.values()));
+    
     // Handle player movement
     socket.on("playerMove", (data) => {
         if (players.has(socket.id)) {
@@ -74,6 +84,22 @@ io.on("connection", (socket) => {
             
             console.log(`🚶 Player ${socket.id.substr(0,6)} moved to (${Math.round(data.x)}, ${Math.round(data.y)}) - broadcasted to room ${GAME_ROOM}`);
         }
+    });
+    
+    // Handle chat messages
+    socket.on("chatMessage", (message) => {
+        if (!message || message.trim() === "") return;
+        
+        const chatData = {
+            playerId: socket.id,
+            playerName: socket.id.substr(0, 6),
+            message: message.trim(),
+            timestamp: Date.now()
+        };
+        
+        // Broadcast to all players in the room (including sender)
+        io.in(GAME_ROOM).emit("chatMessage", chatData);
+        console.log(`💬 Chat from ${chatData.playerName}: ${chatData.message}`);
     });
     
     // Debug: Get room status (optional - for debugging)
@@ -102,6 +128,13 @@ io.on("connection", (socket) => {
         // Tell all other players in the room that this player left
         socket.to(GAME_ROOM).emit("playerLeft", socket.id);
         console.log(`📢 Broadcasted player left ${socket.id} to room ${GAME_ROOM}`);
+
+        // Announce leave to everyone in the room
+        io.in(GAME_ROOM).emit("announce", {
+            type: "leave",
+            playerId: socket.id,
+            message: `Player ${socket.id.substr(0,6)} left the room`
+        });
     });
 });
 
