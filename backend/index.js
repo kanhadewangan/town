@@ -1,6 +1,7 @@
-
 import express from 'express';
 import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 
 const app = express();
@@ -9,64 +10,96 @@ const io = new Server(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
-    }
+    },
+    transports: ["polling", "websocket"],
+    pingTimeout: 20000
 });
 
-// Store all connected players
-const players = new Map();
-const GAME_ROOM = 'main-game-room'; // Single consistent room name
+// Store all connected players (by room)
+const rooms = new Map(); // roomName -> Map(playerId -> playerData)
+
+function getOrCreateRoom(roomName) {
+    if (!rooms.has(roomName)) {
+        rooms.set(roomName, new Map());
+    }
+    return rooms.get(roomName);
+}
+
+function getPlayersInRoom(roomName) {
+    const room = rooms.get(roomName);
+    return room ? Array.from(room.values()) : [];
+}
 
 io.on("connection", (socket) => {
-    // Join the main game room - ALL players join the same room
-    socket.join(GAME_ROOM);
+    console.log(`Socket ${socket.id.substr(0,6)} connected`);
     
-    // Generate a random starting position
-    const startingPosition = {
-        x: Math.random() * 1800 + 100,
-        y: Math.random() * 900 + 100
-    };
-    
-    // Create new player object
-    const newPlayer = {
-        id: socket.id,
-        x: startingPosition.x,
-        y: startingPosition.y,
-        character: `character${(players.size % 5) + 1}`,
-        room: GAME_ROOM
-    };
-    
-    // Add player to our players map
-    players.set(socket.id, newPlayer);
-    
-    // Send the new player their initial data
-    socket.emit("playerJoined", {
-        playerId: socket.id,
-        playerData: newPlayer,
-        allPlayers: Array.from(players.values()),
-        roomName: GAME_ROOM
+    let currentRoom = null;
+
+    // Handle room join
+    socket.on("joinRoom", (data) => {
+        const roomName = data.room || 'default-room';
+        currentRoom = roomName;
+        
+        // Join the socket.io room
+        socket.join(roomName);
+        console.log(`Player ${socket.id.substr(0,6)} joining room: ${roomName}`);
+        
+        // Get or create room players map
+        const roomPlayers = getOrCreateRoom(roomName);
+        
+        // Generate a random starting position
+        const startingPosition = {
+            x: Math.random() * 1800 + 100,
+            y: Math.random() * 900 + 100
+        };
+        
+        // Create new player object
+        const newPlayer = {
+            id: socket.id,
+            x: startingPosition.x,
+            y: startingPosition.y,
+            character: ['character', 'character2', 'character3'][roomPlayers.size % 3],
+            room: roomName
+        };
+        
+        // Add player to room
+        roomPlayers.set(socket.id, newPlayer);
+        
+        // Send the new player their initial data
+        socket.emit("playerJoined", {
+            playerId: socket.id,
+            playerData: newPlayer,
+            allPlayers: Array.from(roomPlayers.values()),
+            roomName: roomName
+        });
+        
+        console.log(`Sent playerJoined to ${socket.id.substr(0,6)}, room: ${roomName}, total players: ${roomPlayers.size}`);
+        
+        // Tell all OTHER players in the same room about the new player
+        socket.to(roomName).emit("newPlayer", newPlayer);
+        
+        // Announce to everyone in the room
+        io.in(roomName).emit("announce", {
+            type: "join",
+            playerId: socket.id,
+            message: `Player ${socket.id.substr(0,6)} joined the room`
+        });
+        
+        // Send existing players
+        socket.emit("existingPlayers", Array.from(roomPlayers.values()));
     });
-    
-    // Tell all OTHER players in the same room about the new player
-    socket.to(GAME_ROOM).emit("newPlayer", newPlayer);
-    
-    // Announce to everyone in the room that a player joined
-    io.in(GAME_ROOM).emit("announce", {
-        type: "join",
-        playerId: socket.id,
-        message: `Player ${socket.id.substr(0,6)} joined the room`
-    });
-    
-    // Also send explicit existingPlayers event
-    socket.emit("existingPlayers", Array.from(players.values()));
     
     // Handle player movement
     socket.on("playerMove", (data) => {
-        if (players.has(socket.id)) {
-            const player = players.get(socket.id);
+        if (!currentRoom) return;
+        
+        const roomPlayers = rooms.get(currentRoom);
+        if (roomPlayers && roomPlayers.has(socket.id)) {
+            const player = roomPlayers.get(socket.id);
             player.x = data.x;
             player.y = data.y;
             
-            socket.to(GAME_ROOM).emit("playerMoved", {
+            socket.to(currentRoom).emit("playerMoved", {
                 playerId: socket.id,
                 x: data.x,
                 y: data.y,
@@ -77,7 +110,7 @@ io.on("connection", (socket) => {
     
     // Handle chat messages
     socket.on("chatMessage", (message) => {
-        if (!message || message.trim() === "") return;
+        if (!message || message.trim() === "" || !currentRoom) return;
         
         const chatData = {
             playerId: socket.id,
@@ -86,41 +119,97 @@ io.on("connection", (socket) => {
             timestamp: Date.now()
         };
         
-        io.in(GAME_ROOM).emit("chatMessage", chatData);
+        io.in(currentRoom).emit("chatMessage", chatData);
     });
     
     // Get room status
     socket.on("getRoomStatus", () => {
-        const roomInfo = io.sockets.adapter.rooms.get(GAME_ROOM);
+        if (!currentRoom) {
+            socket.emit("roomStatus", { error: "Not in a room" });
+            return;
+        }
+        
+        const roomInfo = io.sockets.adapter.rooms.get(currentRoom);
         const playersInRoom = roomInfo ? roomInfo.size : 0;
+        const roomPlayers = rooms.get(currentRoom);
         
         socket.emit("roomStatus", {
-            roomName: GAME_ROOM,
+            roomName: currentRoom,
             playersInRoom: playersInRoom,
-            totalPlayersTracked: players.size,
-            playersList: Array.from(players.keys()).map(id => id.substr(0, 6))
+            totalPlayersTracked: roomPlayers ? roomPlayers.size : 0,
+            playersList: roomPlayers ? Array.from(roomPlayers.keys()).map(id => id.substr(0, 6)) : []
         });
     });
     
     // Handle player disconnect
     socket.on("disconnect", () => {
-        players.delete(socket.id);
+        console.log(`Socket ${socket.id.substr(0,6)} disconnected`);
         
-        socket.to(GAME_ROOM).emit("playerLeft", socket.id);
+        if (currentRoom) {
+            const roomPlayers = rooms.get(currentRoom);
+            if (roomPlayers) {
+                roomPlayers.delete(socket.id);
+                
+                // Clean up empty rooms
+                if (roomPlayers.size === 0) {
+                    rooms.delete(currentRoom);
+                    console.log(`Room ${currentRoom} deleted (empty)`);
+                }
+            }
+            
+            socket.to(currentRoom).emit("playerLeft", socket.id);
 
-        io.in(GAME_ROOM).emit("announce", {
-            type: "leave",
-            playerId: socket.id,
-            message: `Player ${socket.id.substr(0,6)} left the room`
-        });
+            io.in(currentRoom).emit("announce", {
+                type: "leave",
+                playerId: socket.id,
+                message: `Player ${socket.id.substr(0,6)} left the room`
+            });
+        }
+    });
+    
+    // --- WebRTC Signaling ---
+    socket.on('webrtc-offer', (payload) => {
+        // payload: { target, offer, from }
+        if (payload && payload.target) {
+            io.to(payload.target).emit('webrtc-offer', { offer: payload.offer, from: payload.from });
+        } else if (currentRoom) {
+            socket.to(currentRoom).emit('webrtc-offer', { offer: payload.offer, from: payload.from });
+        }
+    });
+
+    socket.on('webrtc-answer', (payload) => {
+        // payload: { target, answer, from }
+        if (payload && payload.target) {
+            io.to(payload.target).emit('webrtc-answer', { answer: payload.answer, from: payload.from });
+        }
+    });
+
+    socket.on('webrtc-ice-candidate', (payload) => {
+        // payload: { target, candidate, from }
+        if (payload && payload.target) {
+            io.to(payload.target).emit('webrtc-ice-candidate', { candidate: payload.candidate, from: payload.from });
+        }
     });
 });
 
+// Static file serving
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
+
+app.use('/public', express.static(path.join(projectRoot, 'public')));
+app.use('/', express.static(projectRoot));
+
 app.get('/', (req, res) => {
-    res.send('<h1>Multiplayer Game Server</h1>');
+    res.sendFile(path.join(projectRoot, 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
+// Connection error logging
+io.engine.on('connection_error', (err) => {
+    console.error('Engine connection_error:', err);
+});
+
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`Multiplayer server listening on *:${PORT}`);
 });

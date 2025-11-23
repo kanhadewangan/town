@@ -1,39 +1,220 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Town</title>
-    <link rel="stylesheet" href="styles.css">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Multiplayer Town</title>
+	<link rel="stylesheet" href="styles.css">
+	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+	<style>
+		/* ...existing styles... */
+
+		/* Room selection UI */
+		#room-selection {
+			position: fixed;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background: rgba(0,0,0,0.7);
+			z-index: 9999;
+		}
+		#room-card {
+			background: linear-gradient(180deg, rgba(10,20,35,0.95), rgba(5,12,22,0.98));
+			border: 4px solid #0b1220;
+			box-shadow: 8px 8px 0 #000;
+			padding: 24px;
+			border-radius: 8px;
+			text-align: center;
+			width: 340px;
+			font-family: 'Press Start 2P', monospace;
+		}
+		#room-card h1 {
+			color: #ff2d2d;
+			font-size: 14px;
+			margin: 0 0 16px;
+			text-shadow: 2px 2px 0 #000;
+		}
+		#room-card p {
+			color: #9fb0c8;
+			font-size: 10px;
+			margin: 0 0 12px;
+		}
+		#room-input {
+			width: 100%;
+			padding: 10px;
+			margin-bottom: 12px;
+			background: #071523;
+			border: 3px solid #07121a;
+			color: #fff;
+			font-family: 'Press Start 2P', monospace;
+			font-size: 11px;
+			text-align: center;
+			box-sizing: border-box;
+		}
+		#room-input::placeholder {
+			color: #556;
+		}
+		.room-btn {
+			display: inline-block;
+			margin: 6px;
+			padding: 10px 14px;
+			border-radius: 4px;
+			border: 3px solid #07121a;
+			font-family: 'Press Start 2P', monospace;
+			font-size: 10px;
+			cursor: pointer;
+			box-shadow: 3px 3px 0 #000;
+		}
+		.room-btn.primary {
+			background: linear-gradient(180deg,#ff4d4d,#b21a1a);
+			color: #fff;
+			border-color: #330807;
+		}
+		.room-btn.secondary {
+			background: linear-gradient(180deg,#2b3b5a,#111827);
+			color: #9fb0c8;
+			border-color: #071228;
+		}
+		.room-btn:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+		#room-error {
+			color: #ff4d4d;
+			font-size: 9px;
+			margin-top: 8px;
+			min-height: 14px;
+		}
+	</style>
 </head>
 <body>
-    <!-- Player Count Indicator -->
-    <div id="player-count">
-        <span class="icon">👥</span>
-        <span id="player-count-number">0</span>
-        <span class="label">Players Online</span>
-    </div>
+	<!-- Player Count Indicator -->
+	<div id="player-count">
+		<span class="icon">👥</span>
+		<span id="player-count-number">0</span>
+		<span class="label">Players Online</span>
+	</div>
 
-    <!-- Chat Toggle Button -->
-    <button id="chat-toggle" class="chat-toggle-btn">
-        <span class="icon">💬</span>
-        <span class="text">Chat</span>
-    </button>
+	<!-- Chat Toggle Button -->
+	<button id="chat-toggle" class="chat-toggle-btn">
+		<span class="icon">💬</span>
+		<span class="text">Chat</span>
+	</button>
 
-    <!-- Chat Sidebar -->
-    <div id="chat-sidebar" class="chat-sidebar">
-        <div class="chat-header">
-            <h3>💬 Chat</h3>
-            <button id="chat-close" class="chat-close-btn">✕</button>
-        </div>
-        <div id="chat-messages"></div>
-        <div id="chat-input-container">
-            <input type="text" id="chat-input" placeholder="Type a message..." maxlength="200">
-            <button id="chat-send">Send</button>
-        </div>
-    </div>
+	<!-- Chat Sidebar -->
+	<div id="chat-sidebar" class="chat-sidebar">
+		<div class="chat-header">
+			<h3>💬 Chat</h3>
+			<button id="chat-close" class="chat-close-btn">✕</button>
+		</div>
+		<div id="chat-messages"></div>
+		<div id="chat-input-container">
+			<input type="text" id="chat-input" placeholder="Type a message..." maxlength="200">
+			<button id="chat-send">Send</button>
+		</div>
+	</div>
+
+	<!-- Room Selection UI -->
+	<div id="room-selection">
+		<div id="room-card">
+			<h1>🎮 Multiplayer Town</h1>
+			<p>Enter a room name to create or join:</p>
+			<input type="text" id="room-input" placeholder="e.g. my-room-123" maxlength="30" autocomplete="off">
+			<div>
+				<button class="room-btn primary" id="create-room">Create Room</button>
+				<button class="room-btn secondary" id="join-room">Join Room</button>
+			</div>
+			<p id="room-error"></p>
+			<p style="margin-top:16px;font-size:9px;color:#556">Or leave empty for random room</p>
+		</div>
+	</div>
+
+	<!-- CRT overlay -->
+	<script>
+		(function(){
+			const el = document.createElement('div');
+			el.className = 'crt-overlay';
+			document.documentElement.appendChild(el);
+		})();
+	</script>
 </body>
+
+<!-- External libs -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.90.0/phaser.min.js" integrity="sha512-/tJYyDCrI7hnHWp45P189aOwPa6lTREosRhlxEIqx8skB4A3a3rD3iz4o335SJd4sORqjVHw5y1S2hq4hciwLw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+
+<!-- Room selection logic -->
+<script>
+	(function () {
+		const overlay = document.getElementById('room-selection');
+		const roomInput = document.getElementById('room-input');
+		const createBtn = document.getElementById('create-room');
+		const joinBtn = document.getElementById('join-room');
+		const errorEl = document.getElementById('room-error');
+
+		function generateRandomRoom() {
+			return 'room-' + Math.random().toString(36).substr(2, 6);
+		}
+
+		function sanitizeRoom(name) {
+			// Allow alphanumeric, dash, underscore
+			return name.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 30);
+		}
+
+		function selectRoom(mode) {
+			let roomName = sanitizeRoom(roomInput.value.trim());
+			
+			// Generate random if empty
+			if (!roomName) {
+				roomName = generateRandomRoom();
+			}
+
+			// Validate length
+			if (roomName.length < 3) {
+				errorEl.textContent = 'Room name must be at least 3 characters';
+				return;
+			}
+
+			// Disable UI
+			createBtn.disabled = true;
+			joinBtn.disabled = true;
+			roomInput.disabled = true;
+			errorEl.textContent = '';
+
+			// Expose selection globally
+			window.selectedRoom = roomName;
+			window.selectedMode = mode; // 'create' or 'join'
+
+			// Dispatch event for main.js / scene.js
+			window.dispatchEvent(new CustomEvent('roomSelected', {
+				detail: { room: roomName, mode: mode }
+			}));
+
+			console.log(`Room selected: ${roomName}, Mode: ${mode}`);
+
+			// Hide overlay after short delay
+			setTimeout(() => {
+				if (overlay) overlay.style.display = 'none';
+			}, 300);
+		}
+
+		createBtn.addEventListener('click', () => selectRoom('create'));
+		joinBtn.addEventListener('click', () => selectRoom('join'));
+
+		// Allow Enter key to join
+		roomInput.addEventListener('keypress', (e) => {
+			if (e.key === 'Enter') {
+				selectRoom('join');
+			}
+		});
+
+		// Focus input on load
+		setTimeout(() => roomInput.focus(), 100);
+	})();
+</script>
+
+<!-- App module -->
 <script src="main.js" type="module"></script>
 </html>
