@@ -31,8 +31,6 @@ export class Scene extends Phaser.Scene {
         const h = this.scale.height;
         const w = this.scale.width;
 
-        console.log("🎮 Scene created with dimensions:", w, "x", h);
-
         // Background - centered and scaled to fit screen
         const background = this.add.image(w / 2, h / 2, "background");
         background.setDisplaySize(w, h);
@@ -40,26 +38,24 @@ export class Scene extends Phaser.Scene {
         // Set up physics world
         this.physics.world.setBounds(0, 0, w, h);
 
-        // WASD keys
+        // Arrow keys for movement
         this.keys = this.input.keyboard.addKeys({
-            w: Phaser.Input.Keyboard.KeyCodes.W,
-            s: Phaser.Input.Keyboard.KeyCodes.S,
-            a: Phaser.Input.Keyboard.KeyCodes.A,
-            d: Phaser.Input.Keyboard.KeyCodes.D
+            up: Phaser.Input.Keyboard.KeyCodes.UP,
+            down: Phaser.Input.Keyboard.KeyCodes.DOWN,
+            left: Phaser.Input.Keyboard.KeyCodes.LEFT,
+            right: Phaser.Input.Keyboard.KeyCodes.RIGHT
         });
-
-        console.log("🎹 Keys configured:", this.keys);
 
         // Music
         const music = this.sound.add("bg", { loop: true, volume: 0.1 });
         // music.play();
 
         this.setupSocketListeners();
+        this.setupChat();
 
         // Fallback: Create a temporary player if socket doesn't connect in 3 seconds
         setTimeout(() => {
             if (!this.myPlayer) {
-                console.log("⚠️ Socket not connected - creating fallback player");
                 this.createFallbackPlayer(w, h);
             }
         }, 3000);
@@ -76,40 +72,193 @@ export class Scene extends Phaser.Scene {
         
     }
 
-    setupSocketListeners() {
-        // Debug socket connection
-        socket.on("connect", () => {
-            console.log("✅ Socket connected with ID:", socket.id);
+    // Simple on-screen notification
+    showNotification(text, type = 'info') {
+        const color = type === 'join' ? '#4caf50' : (type === 'leave' ? '#f44336' : '#2196f3');
+        const notif = this.add.text(this.cameras.main.midPoint.x, 50, text, {
+            fontSize: '18px',
+            backgroundColor: color,
+            color: '#fff',
+            padding: { x: 10, y: 6 }
+        }).setOrigin(0.5);
+        
+        this.tweens.add({
+            targets: notif,
+            alpha: { from: 1, to: 0 },
+            duration: 2500,
+            ease: 'Linear',
+            onComplete: () => notif.destroy()
+        });
+    }
+
+    // Setup chat system
+    setupChat() {
+        const chatInput = document.getElementById('chat-input');
+        const chatSend = document.getElementById('chat-send');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatToggle = document.getElementById('chat-toggle');
+        const chatClose = document.getElementById('chat-close');
+        const chatSidebar = document.getElementById('chat-sidebar');
+        
+        if (!chatInput || !chatSend || !chatMessages || !chatToggle || !chatClose || !chatSidebar) {
+            return;
+        }
+
+        // Toggle chat sidebar
+        chatToggle.addEventListener('click', () => {
+            chatSidebar.classList.toggle('open');
+            chatToggle.classList.toggle('active');
             
+            // Auto-focus input when opening
+            if (chatSidebar.classList.contains('open')) {
+                setTimeout(() => chatInput.focus(), 100);
+            }
+        });
+
+        // Close chat sidebar
+        chatClose.addEventListener('click', () => {
+            chatSidebar.classList.remove('open');
+            chatToggle.classList.remove('active');
+        });
+
+        // Send chat message
+        const sendMessage = () => {
+            const message = chatInput.value.trim();
+            if (message) {
+                socket.emit('chatMessage', message);
+                chatInput.value = '';
+            }
+        };
+
+        // Send on button click
+        chatSend.addEventListener('click', sendMessage);
+
+        // Send on Enter key
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Prevent arrow keys from triggering when typing in chat
+        chatInput.addEventListener('focus', () => {
+            this.input.keyboard.enabled = false;
+        });
+
+        chatInput.addEventListener('blur', () => {
+            this.input.keyboard.enabled = true;
+        });
+
+        // Listen for incoming chat messages
+        socket.on('chatMessage', (data) => {
+            this.addChatMessage(data);
+            
+            // Show notification badge if chat is closed
+            if (!chatSidebar.classList.contains('open')) {
+                this.showChatNotification();
+            }
+        });
+    }
+
+    // Add a chat message to the UI
+    addChatMessage(data) {
+        const chatMessages = document.getElementById('chat-messages');
+        if (!chatMessages) return;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        
+        // Mark own messages
+        if (data.playerId === this.myPlayerId) {
+            messageDiv.classList.add('own-message');
+        }
+
+        const playerName = document.createElement('span');
+        playerName.className = 'player-name';
+        playerName.textContent = data.playerName + ':';
+
+        const messageText = document.createElement('span');
+        messageText.className = 'message-text';
+        messageText.textContent = data.message;
+
+        messageDiv.appendChild(playerName);
+        messageDiv.appendChild(messageText);
+        chatMessages.appendChild(messageDiv);
+
+        // Auto-scroll to bottom
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Keep only last 50 messages
+        while (chatMessages.children.length > 50) {
+            chatMessages.removeChild(chatMessages.firstChild);
+        }
+    }
+
+    // Add system message to chat
+    addSystemMessage(text, type = 'info') {
+        const chatMessages = document.getElementById('chat-messages');
+        if (!chatMessages) return;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message system-message';
+        messageDiv.textContent = text;
+
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Keep only last 50 messages
+        while (chatMessages.children.length > 50) {
+            chatMessages.removeChild(chatMessages.firstChild);
+        }
+    }
+
+    // Update player count display
+    updatePlayerCount(count) {
+        const playerCountElement = document.getElementById('player-count-number');
+        if (playerCountElement) {
+            playerCountElement.textContent = count;
+        }
+    }
+
+    // Show chat notification (when chat is closed and new message arrives)
+    showChatNotification() {
+        const chatToggle = document.getElementById('chat-toggle');
+        if (chatToggle && !chatToggle.classList.contains('active')) {
+            // Add pulse animation
+            chatToggle.style.animation = 'pulse 0.5s ease-in-out 3';
+            setTimeout(() => {
+                chatToggle.style.animation = '';
+            }, 1500);
+        }
+    }
+
+    setupSocketListeners() {
+        socket.on("connect", () => {
             // Request room status for debugging
             setTimeout(() => {
                 socket.emit("getRoomStatus");
             }, 1000);
         });
         
-        // Room status response (for debugging)
         socket.on("roomStatus", (data) => {
-            console.log("📊 Room Status:", data);
+            // Room status received
         });
 
         socket.on("disconnect", () => {
-            console.log("❌ Socket disconnected");
+            // Socket disconnected
         });
 
         // When we join the game
         socket.on("playerJoined", (data) => {
-            console.log("🎮 I joined the game!", data);
-            console.log(`🏠 Joined room: ${data.roomName || 'unknown'}`);
-            console.log(`👥 Total players in game: ${data.allPlayers.length}`);
-            
             this.myPlayerId = data.playerId;
+            
+            // Update player count
+            this.updatePlayerCount(data.allPlayers.length);
             
             // Create my character
             this.myPlayer = this.physics.add.sprite(data.playerData.x, data.playerData.y, data.playerData.character);
             this.myPlayer.setScale(0.2);
             this.myPlayer.setCollideWorldBounds(true);
-            
-            console.log(`✅ My player created: ${data.playerData.character} at (${Math.round(data.playerData.x)}, ${Math.round(data.playerData.y)})`);
             
             // Make camera follow my character
             this.cameras.main.startFollow(this.myPlayer);
@@ -117,22 +266,30 @@ export class Scene extends Phaser.Scene {
             
             // Add all existing players (excluding myself)
             const otherPlayers = data.allPlayers.filter(p => p.id !== this.myPlayerId);
-            console.log(`🔄 Adding ${otherPlayers.length} existing players`);
             
             otherPlayers.forEach(playerData => {
                 this.addOtherPlayer(playerData);
             });
         });
 
+        // Global announce (join/leave)
+        socket.on("announce", (info) => {
+            this.showNotification(info.message, info.type);
+            
+            // Also show in chat as system message
+            this.addSystemMessage(info.message, info.type);
+        });
+
         // When a new player joins
         socket.on("newPlayer", (playerData) => {
-            console.log("🆕 New player joined:", playerData.id.substr(0,6), playerData.character);
             this.addOtherPlayer(playerData);
+            
+            // Update player count (add 1 for the new player)
+            this.updatePlayerCount(this.players.size + 1); // +1 for myself
         });
 
         // When existing players are sent
         socket.on("existingPlayers", (playersArray) => {
-            console.log("Existing players:", playersArray);
             playersArray.forEach(playerData => {
                 if (playerData.id !== this.myPlayerId) {
                     this.addOtherPlayer(playerData);
@@ -142,7 +299,6 @@ export class Scene extends Phaser.Scene {
 
         // When another player moves
         socket.on("playerMoved", (data) => {
-            console.log("👥 Player moved:", data.playerId.substr(0, 6), "to", Math.round(data.x), Math.round(data.y));
             const otherPlayer = this.players.get(data.playerId);
             if (otherPlayer) {
                 // Show movement indicator
@@ -185,28 +341,23 @@ export class Scene extends Phaser.Scene {
                         ease: 'Linear'
                     });
                 }
-            } else {
-                console.log("⚠️ Player not found:", data.playerId);
             }
         });
 
         // When a player leaves
         socket.on("playerLeft", (playerId) => {
-            console.log("Player left:", playerId);
             const playerSprite = this.players.get(playerId);
             if (playerSprite) {
                 playerSprite.destroy();
                 this.players.delete(playerId);
+                
+                // Update player count (subtract 1 for the player who left)
+                this.updatePlayerCount(this.players.size + 1); // +1 for myself
             }
         });
-        if(socket.id === undefined){{
-            this.players.forEach((player, playerId) => {
-                player.destroy();
-                this.players.delete(playerId);
-            });
-        }
+        
     }
-    }
+    
     addOtherPlayer(playerData) {
         // Create sprite for other player
         const otherPlayer = this.physics.add.sprite(playerData.x, playerData.y, playerData.character);
@@ -230,46 +381,35 @@ export class Scene extends Phaser.Scene {
         otherPlayer.nameText = nameText;
         otherPlayer.movementIndicator = movementIndicator;
         this.players.set(playerData.id, otherPlayer);
-        
-        console.log(`✅ Added player ${playerData.id} (${playerData.character}) at (${Math.round(playerData.x)}, ${Math.round(playerData.y)})`);
     }
 
     update() {
-        // Debug: Check if myPlayer exists
         if (!this.myPlayer) {
-            console.log("⚠️ No player found in update - waiting for socket connection");
             return;
         }
 
         const speed = 150;
         let isMoving = false;
-        const previousX = this.myPlayer.x;
-        const previousY = this.myPlayer.y;
 
         // Reset velocity
         this.myPlayer.setVelocity(0);
 
-        // Handle movement with less console spam
-        let directions = [];
-        if (this.keys.w.isDown) {
+        // Handle movement with arrow keys
+        if (this.keys.up.isDown) {
             this.myPlayer.setVelocityY(-speed);
             isMoving = true;
-            directions.push("UP");
         }
-        if (this.keys.s.isDown) {
+        if (this.keys.down.isDown) {
             this.myPlayer.setVelocityY(speed);
             isMoving = true;
-            directions.push("DOWN");
         }
-        if (this.keys.a.isDown) {
+        if (this.keys.left.isDown) {
             this.myPlayer.setVelocityX(-speed);
             isMoving = true;
-            directions.push("LEFT");
         }
-        if (this.keys.d.isDown) {
+        if (this.keys.right.isDown) {
             this.myPlayer.setVelocityX(speed);
             isMoving = true;
-            directions.push("RIGHT");
         }
 
         // Throttle movement updates for better performance
@@ -291,8 +431,6 @@ export class Scene extends Phaser.Scene {
                 this.lastSentPosition.x = this.myPlayer.x;
                 this.lastSentPosition.y = this.myPlayer.y;
                 this.movementThrottle = 0;
-                
-                console.log(`📡 Sent position: (${Math.round(this.myPlayer.x)}, ${Math.round(this.myPlayer.y)}) - Direction: ${directions.join("+")}`);
             }
         }
 
