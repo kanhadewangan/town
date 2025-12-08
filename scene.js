@@ -1,5 +1,5 @@
-// Socket will be initialized after room selection
-let socket = null;
+// Socket.IO connection using global io object from CDN (same-origin)
+const socket = io("ws://localhost:8080 ");
 
 export class Scene extends Phaser.Scene {
     constructor() {
