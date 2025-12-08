@@ -17,4 +17,4 @@ RUN  npm ci --only=production
 COPY --from=0 /app/node_modules ./node_modules
 COPY . .
 EXPOSE 3000
-CMD ["node", "index.js"]
+CMD ["node", "backend/index.js"]

@@ -5,8 +5,10 @@
   "main": "./backend/index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "npm run build"
+    "start": "node ./backend/index.js",
+    "dev": "NODE_ENV=development node ./backend/index.js",
+    "build": "echo \"skip build\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
