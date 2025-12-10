@@ -7,13 +7,16 @@ import { Server } from 'socket.io';
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    },
-    transports: ["polling", "websocket"],
-    pingTimeout: 20000
+  cors: {
+    origin: ['http://127.0.0.1:5500', 'http://localhost:5500'],
+    credentials: true
+  },
+  transports: ["polling", "websocket"],
+  pingTimeout: 20000
 });
+
+
+
 
 // Store all connected players (by room)
 const rooms = new Map(); // roomName -> Map(playerId -> playerData)
