@@ -207,6 +207,10 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(projectRoot, 'index.html'));
 });
 
+app.get("/status", (req, res) => {
+    res.json({ status: "ok", activeRooms: rooms.size });
+})
+
 // Connection error logging
 io.engine.on('connection_error', (err) => {
     console.error('Engine connection_error:', err);
