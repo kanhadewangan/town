@@ -203,9 +203,7 @@ const projectRoot = path.resolve(__dirname, '..');
 app.use('/public', express.static(path.join(projectRoot, 'public')));
 app.use('/', express.static(projectRoot));
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(projectRoot, 'index.html'));
-});
+
 
 app.get("/status", (req, res) => {
     res.json({ status: "ok", activeRooms: rooms.size });
