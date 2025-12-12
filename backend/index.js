@@ -8,11 +8,18 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ['https://syncarena.onrender.com/'],
-    credentials: true
+    origin: [
+      'https://syncarena.onrender.com',
+      'http://localhost:3000',
+      'http://localhost:8000',
+      'http://127.0.0.1:5500'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST']
   },
-  transports: ["polling", "websocket"],
-  pingTimeout: 20000
+  transports: ["websocket", "polling"],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 
@@ -34,7 +41,7 @@ function getPlayersInRoom(roomName) {
 }
 
 io.on("connection", (socket) => {
-    console.log(`Socket ${socket.id.substr(0,6)} connected`);
+    console.log(`Socket ${socket.id.substr(0,6)} connected from ${socket.handshake.address}`);
     
     let currentRoom = null;
 
