@@ -1,7 +1,7 @@
 // Socket.IO connection using global io object from CDN (same-origin)
 
 let  socket = null
- socket = io("http://localhost:8080" );
+ socket = io("http://localhost:8080");
 
 export class Scene extends Phaser.Scene {
     constructor() {
@@ -43,7 +43,7 @@ export class Scene extends Phaser.Scene {
         const w = this.scale.width;
 
         // Background - centered and scaled to fit screen
-        const background = this.add.image(w / 2, h / 2, "background");
+        const background = this.add.image(w /2, h /2, "background");
         background.setDisplaySize(w, h);
 
         // Set up physics world

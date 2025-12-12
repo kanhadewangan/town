@@ -195,13 +195,6 @@ io.on("connection", (socket) => {
     });
 });
 
-// Static file serving
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '..');
-
-app.use('/public', express.static(path.join(projectRoot, 'public')));
-app.use('/', express.static(projectRoot));
 
 
 
