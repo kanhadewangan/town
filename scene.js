@@ -1,5 +1,3 @@
-
-
 let socket = null;
 socket = io("https://town-3.onrender.com");
 
@@ -487,7 +485,7 @@ export class Scene extends Phaser.Scene {
         hangupBtn.disabled = true;
         controls.appendChild(hangupBtn);
 
-        // Bigger video panel
+        // Video panel with minimize functionality
         const videoPanel = document.createElement('div');
         videoPanel.id = 'video-panel';
         videoPanel.style.cssText = `
@@ -503,51 +501,77 @@ export class Scene extends Phaser.Scene {
             display: none;
             flex-direction: column;
             gap: 10px;
-            width: 380px;
-            height: 420px;
+            width: 320px;
+            max-height: 400px;
             font-family: 'Press Start 2P', monospace;
+            transition: all 0.3s ease;
         `;
+        videoPanel.dataset.minimized = false;
         document.body.appendChild(videoPanel);
 
-        // Header
+        // Header with minimize button
         const panelHeader = document.createElement('div');
-        panelHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:2px solid #1a2a3a;';
-        panelHeader.innerHTML = '<span style="color:#ff2d2d;font-size:10px;">📹 Video Call</span>';
+        panelHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:2px solid #1a2a3a;cursor:move;';
+        
+        const headerTitle = document.createElement('span');
+        headerTitle.style.cssText = 'color:#ff2d2d;font-size:10px;';
+        headerTitle.textContent = '📹 Video Call';
+        
+        const headerControls = document.createElement('div');
+        headerControls.style.cssText = 'display:flex;gap:6px;';
+        
+        const minimizeBtn = document.createElement('button');
+        minimizeBtn.style.cssText = 'background:transparent;border:none;color:#ff2d2d;cursor:pointer;font-size:12px;padding:0;width:20px;height:20px;';
+        minimizeBtn.textContent = '−';
+        minimizeBtn.title = 'Minimize';
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.style.cssText = 'background:transparent;border:none;color:#ff2d2d;cursor:pointer;font-size:12px;padding:0;width:20px;height:20px;';
+        closeBtn.textContent = '✕';
+        closeBtn.title = 'Close';
+        
+        headerControls.appendChild(minimizeBtn);
+        headerControls.appendChild(closeBtn);
+        panelHeader.appendChild(headerTitle);
+        panelHeader.appendChild(headerControls);
         videoPanel.appendChild(panelHeader);
 
-        // Video container - bigger
+        // Video container with auto-grid
         const videoContainer = document.createElement('div');
         videoContainer.id = 'videos';
-        videoContainer.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;min-height:120px;';
+        videoContainer.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 100px;
+            max-height: 200px;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid #1a2a3a;
+            border-radius: 4px;
+            padding: 6px;
+        `;
         videoPanel.appendChild(videoContainer);
 
-        // Bigger local video
-        const localVideo = document.createElement('video');
-        localVideo.id = 'localVideo';
-        localVideo.autoplay = true;
-        localVideo.muted = true;
-        localVideo.playsInline = true;
-        localVideo.style.cssText = 'width:140px;height:105px;object-fit:cover;border:2px solid #1a2a3a;background:#0a0a0a;border-radius:4px;';
-        videoContainer.appendChild(localVideo);
-
-        // Bigger chat messages area
+        // Chat messages area
         const videoChatMessages = document.createElement('div');
         videoChatMessages.id = 'video-chat-messages';
         videoChatMessages.style.cssText = `
             flex: 1;
-            min-height: 120px;
-            max-height: 160px;
+            min-height: 80px;
+            max-height: 120px;
             overflow-y: auto;
             background: rgba(0,0,0,0.4);
             border: 2px solid #1a2a3a;
             border-radius: 4px;
             padding: 8px;
-            font-size: 9px;
+            font-size: 8px;
             color: #8a9ab0;
         `;
         videoPanel.appendChild(videoChatMessages);
 
-        // Chat input - bigger
+        // Chat input container
         const videoChatInputContainer = document.createElement('div');
         videoChatInputContainer.style.cssText = 'display:flex;gap:6px;';
         videoPanel.appendChild(videoChatInputContainer);
@@ -559,12 +583,12 @@ export class Scene extends Phaser.Scene {
         videoChatInput.maxLength = 150;
         videoChatInput.style.cssText = `
             flex: 1;
-            padding: 8px 10px;
+            padding: 6px 8px;
             background: #0a1018;
             border: 2px solid #1a2a3a;
             color: #ccc;
             font-family: 'Press Start 2P', monospace;
-            font-size: 8px;
+            font-size: 7px;
             border-radius: 4px;
         `;
         videoChatInputContainer.appendChild(videoChatInput);
@@ -573,15 +597,63 @@ export class Scene extends Phaser.Scene {
         videoChatSend.id = 'video-chat-send';
         videoChatSend.textContent = '➤';
         videoChatSend.style.cssText = `
-            padding: 8px 14px;
+            padding: 6px 10px;
             background: linear-gradient(180deg,#e04040,#a01818);
             border: 2px solid #601010;
             color: #fff;
             cursor: pointer;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 10px;
         `;
         videoChatInputContainer.appendChild(videoChatSend);
+
+        // Minimize functionality
+        minimizeBtn.addEventListener('click', () => {
+            const isMinimized = videoPanel.dataset.minimized === 'true';
+            if (isMinimized) {
+                videoPanel.dataset.minimized = false;
+                videoPanel.style.height = 'auto';
+                videoPanel.style.maxHeight = '400px';
+                minimizeBtn.textContent = '−';
+            } else {
+                videoPanel.dataset.minimized = true;
+                videoPanel.style.height = 'auto';
+                videoPanel.style.maxHeight = '35px';
+                minimizeBtn.textContent = '+';
+            }
+        });
+
+        // Close video panel
+        closeBtn.addEventListener('click', () => {
+            videoPanel.style.display = 'none';
+            const hangupBtn = document.getElementById('hangup-call');
+            const startBtn = document.getElementById('start-call');
+            if (hangupBtn) hangupBtn.disabled = true;
+            if (startBtn) startBtn.disabled = false;
+        });
+
+        // Draggable functionality
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        panelHeader.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            dragOffsetX = e.clientX - videoPanel.offsetLeft;
+            dragOffsetY = e.clientY - videoPanel.offsetTop;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                videoPanel.style.left = (e.clientX - dragOffsetX) + 'px';
+                videoPanel.style.bottom = 'auto';
+                videoPanel.style.top = (e.clientY - dragOffsetY) + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
 
         // Event handlers
         const sendVideoChat = () => {
@@ -604,6 +676,9 @@ export class Scene extends Phaser.Scene {
             startBtn.disabled = true;
             hangupBtn.disabled = false;
             videoPanel.style.display = 'flex';
+            videoPanel.dataset.minimized = false;
+            minimizeBtn.textContent = '−';
+            videoPanel.style.maxHeight = '400px';
             await this.startVideoCall();
         });
 
@@ -888,4 +963,4 @@ export class Scene extends Phaser.Scene {
             }
         });
     }
-}  
+}
