@@ -1,7 +1,7 @@
-// Socket.IO connection using global io object from CDN (same-origin)
 
-let  socket = null
- socket = io("http://localhost:8080");
+
+let socket = null;
+socket = io("https://town-3.onrender.com");
 
 export class Scene extends Phaser.Scene {
     constructor() {
@@ -85,9 +85,15 @@ export class Scene extends Phaser.Scene {
         this.roomName = roomName;
         console.log(`Initializing with room: ${roomName}`);
 
-        // Initialize socket connection
-        socket = io("ws://localhost:8080", {
-            query: { room: roomName }
+        const socketUrl = "https://town-3.onrender.com";
+        console.log('Connecting to:', socketUrl); // Debug log
+        
+        socket = io(socketUrl, {
+            query: { room: roomName },
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: 5
         });
 
         // Make socket available globally for other methods
@@ -882,4 +888,4 @@ export class Scene extends Phaser.Scene {
             }
         });
     }
-}
+}  
