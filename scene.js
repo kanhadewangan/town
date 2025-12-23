@@ -1,5 +1,5 @@
 let socket = null;
-socket = io("https://town-3.onrender.com");
+socket = io("http://3.239.49.10");
 
 export class Scene extends Phaser.Scene {
     constructor() {
@@ -83,8 +83,7 @@ export class Scene extends Phaser.Scene {
         this.roomName = roomName;
         console.log(`Initializing with room: ${roomName}`);
 
-        const socketUrl = "https://town-3.onrender.com";
-        console.log('Connecting to:', socketUrl); // Debug log
+        const socketUrl = "http://3.239.49.10/";
         
         socket = io(socketUrl, {
             query: { room: roomName },
