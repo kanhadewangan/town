@@ -1,5 +1,6 @@
+
 let socket = null;
-socket = io("http://3.239.49.10");
+socket = io("https://synarena-api.duckdns.org");
 
 export class Scene extends Phaser.Scene {
     constructor() {
@@ -83,7 +84,7 @@ export class Scene extends Phaser.Scene {
         this.roomName = roomName;
         console.log(`Initializing with room: ${roomName}`);
 
-        const socketUrl = "http://3.239.49.10/";
+        const socketUrl = "https://synarena-api.duckdns.org";
         
         socket = io(socketUrl, {
             query: { room: roomName },
