@@ -33,6 +33,7 @@ export class Scene extends Phaser.Scene {
         this.load.image("character1", "public/character.png");
         this.load.image("character2", "public/character2.png");
         this.load.image("character3", "public/character3.png");
+        this.load.image("character4", "public/character4.png");
         // Only preload available character sprites
         this.load.audio("bg", "public/bg.mp3");
     }
