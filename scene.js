@@ -1,6 +1,6 @@
 
 let socket = null;
-socket = io("https://synarena-api.duckdns.org");
+// Socket will be initialized in initializeWithRoom()
 
 export class Scene extends Phaser.Scene {
     constructor() {
@@ -85,7 +85,10 @@ export class Scene extends Phaser.Scene {
         this.roomName = roomName;
         console.log(`Initializing with room: ${roomName}`);
 
-        const socketUrl = "https://synarena-api.duckdns.org";
+        // Use localhost for development, remote for production
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const socketUrl = isLocalhost ? "http://localhost:8080" : "https://synarena-api.duckdns.org";
+        console.log(`Connecting to socket server: ${socketUrl}`);
         
         socket = io(socketUrl, {
             query: { room: roomName },
@@ -537,6 +540,33 @@ export class Scene extends Phaser.Scene {
         panelHeader.appendChild(headerControls);
         videoPanel.appendChild(panelHeader);
 
+        // Local preview container (muted to prevent echo)
+        const localWrapper = document.createElement('div');
+        localWrapper.style.cssText = `
+            display:flex;
+            align-items:center;
+            gap:8px;
+            background: rgba(0,0,0,0.35);
+            border: 2px solid #1a2a3a;
+            border-radius: 4px;
+            padding: 6px;
+        `;
+
+        const localLabel = document.createElement('span');
+        localLabel.textContent = 'You';
+        localLabel.style.cssText = 'color:#9fb0c8;font-size:9px;min-width:34px;';
+        localWrapper.appendChild(localLabel);
+
+        const localVideo = document.createElement('video');
+        localVideo.id = 'localVideo';
+        localVideo.autoplay = true;
+        localVideo.muted = true;
+        localVideo.playsInline = true;
+        localVideo.style.cssText = 'width:120px;height:90px;object-fit:cover;border:2px solid #1a2a3a;background:#0a0a0a;border-radius:4px;';
+        localWrapper.appendChild(localVideo);
+
+        videoPanel.appendChild(localWrapper);
+
         // Video container with auto-grid
         const videoContainer = document.createElement('div');
         videoContainer.id = 'videos';
@@ -681,6 +711,14 @@ export class Scene extends Phaser.Scene {
             minimizeBtn.textContent = '−';
             videoPanel.style.maxHeight = '400px';
             await this.startVideoCall();
+            
+            // Notify other players about the call
+            if (this.socket && this.socket.connected) {
+                console.log('Emitting videoCallStarted event');
+                this.socket.emit('videoCallStarted');
+            } else {
+                console.warn('Socket not connected, cannot emit videoCallStarted');
+            }
         });
 
         hangupBtn.addEventListener('click', () => {
@@ -688,7 +726,138 @@ export class Scene extends Phaser.Scene {
             hangupBtn.disabled = true;
             startBtn.disabled = false;
             videoPanel.style.display = 'none';
+            
+            // Notify other players that we ended the call
+            if (this.socket && this.socket.connected) {
+                this.socket.emit('videoCallEnded');
+            }
         });
+    }
+
+    // Show call invite notification
+    showCallInvite(data) {
+        console.log('showCallInvite called with:', data);
+        
+        // Remove existing invite if any
+        const existingInvite = document.getElementById('call-invite');
+        if (existingInvite) existingInvite.remove();
+
+        const invite = document.createElement('div');
+        invite.id = 'call-invite';
+        invite.style.cssText = `
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10001;
+            background: linear-gradient(180deg, rgba(10,20,35,0.98), rgba(5,12,22,0.99));
+            border: 3px solid #ff4d4d;
+            box-shadow: 0 0 20px rgba(255,77,77,0.4), 6px 6px 0 #000;
+            border-radius: 8px;
+            padding: 16px 24px;
+            font-family: 'Press Start 2P', monospace;
+            text-align: center;
+            animation: slideDown 0.3s ease-out;
+        `;
+
+        invite.innerHTML = `
+            <style>
+                @keyframes slideDown {
+                    from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+                    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+                }
+                @keyframes pulse-glow {
+                    0%, 100% { box-shadow: 0 0 10px rgba(255,77,77,0.4); }
+                    50% { box-shadow: 0 0 25px rgba(255,77,77,0.7); }
+                }
+                #call-invite { animation: slideDown 0.3s ease-out, pulse-glow 2s infinite; }
+            </style>
+            <div style="color:#ff4d4d;font-size:12px;margin-bottom:10px;">📹 Video Call</div>
+            <div style="color:#9fb0c8;font-size:9px;margin-bottom:14px;">
+                <span style="color:#fff;">${data.playerName}</span> started a video call
+            </div>
+            <div style="display:flex;gap:10px;justify-content:center;">
+                <button id="join-call-btn" style="
+                    padding: 8px 16px;
+                    background: linear-gradient(180deg,#4caf50,#2e7d32);
+                    border: 2px solid #1b5e20;
+                    color: #fff;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 9px;
+                    cursor: pointer;
+                    border-radius: 4px;
+                    box-shadow: 3px 3px 0 #000;
+                ">✓ Join</button>
+                <button id="decline-call-btn" style="
+                    padding: 8px 16px;
+                    background: linear-gradient(180deg,#2b3b5a,#111827);
+                    border: 2px solid #071228;
+                    color: #9fb0c8;
+                    font-family: 'Press Start 2P', monospace;
+                    font-size: 9px;
+                    cursor: pointer;
+                    border-radius: 4px;
+                    box-shadow: 3px 3px 0 #000;
+                ">✕ Later</button>
+            </div>
+        `;
+
+        document.body.appendChild(invite);
+
+        // Play notification sound (optional beep)
+        this.playNotificationSound();
+
+        // Join button handler
+        document.getElementById('join-call-btn').addEventListener('click', async () => {
+            invite.remove();
+            const startBtn = document.getElementById('start-call');
+            const hangupBtn = document.getElementById('hangup-call');
+            const videoPanel = document.getElementById('video-panel');
+            
+            if (startBtn) startBtn.disabled = true;
+            if (hangupBtn) hangupBtn.disabled = false;
+            if (videoPanel) {
+                videoPanel.style.display = 'flex';
+                videoPanel.dataset.minimized = false;
+            }
+            await this.startVideoCall();
+        });
+
+        // Decline button handler
+        document.getElementById('decline-call-btn').addEventListener('click', () => {
+            invite.remove();
+        });
+
+        // Auto-dismiss after 15 seconds
+        setTimeout(() => {
+            if (document.getElementById('call-invite')) {
+                invite.remove();
+            }
+        }, 15000);
+    }
+
+    // Play a subtle notification sound
+    playNotificationSound() {
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        } catch (e) {
+            // Audio not supported or blocked
+        }
     }
 
     // --- WebRTC Methods ---
@@ -783,22 +952,69 @@ export class Scene extends Phaser.Scene {
 
     attachRemoteStream(peerId, stream) {
         const id = `remote_${peerId}`;
-        let video = this.remoteVideoElements.get(id);
+        const wrapperId = `wrapper_${peerId}`;
+        let wrapper = document.getElementById(wrapperId);
         
-        if (!video) {
+        if (!wrapper) {
             const container = document.getElementById('videos');
             if (!container) return;
 
-            video = document.createElement('video');
+            // Create wrapper with name label
+            wrapper = document.createElement('div');
+            wrapper.id = wrapperId;
+            wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;';
+            
+            // Player name label
+            const nameLabel = document.createElement('span');
+            nameLabel.className = 'video-name-label';
+            nameLabel.textContent = peerId.substr(0, 6);
+            nameLabel.style.cssText = 'color:#ff2d2d;font-size:8px;text-shadow:1px 1px 0 #000;';
+            wrapper.appendChild(nameLabel);
+
+            // Video element
+            const video = document.createElement('video');
             video.id = id;
             video.autoplay = true;
             video.playsInline = true;
             video.style.cssText = 'width:140px;height:105px;object-fit:cover;border:2px solid #1a2a3a;background:#0a0a0a;border-radius:4px;';
-            container.appendChild(video);
+            wrapper.appendChild(video);
+            
+            container.appendChild(wrapper);
             this.remoteVideoElements.set(id, video);
         }
 
-        video.srcObject = stream;
+        const video = this.remoteVideoElements.get(id);
+        if (video) {
+            video.srcObject = stream;
+        }
+    }
+
+    // Remove a specific remote player's video
+    removeRemoteVideo(peerId) {
+        const videoId = `remote_${peerId}`;
+        const wrapperId = `wrapper_${peerId}`;
+        const wrapper = document.getElementById(wrapperId);
+        if (wrapper) {
+            try {
+                wrapper.remove();
+            } catch (e) {}
+        }
+        const video = this.remoteVideoElements.get(videoId);
+        if (video) {
+            try {
+                video.srcObject = null;
+            } catch (e) {}
+            this.remoteVideoElements.delete(videoId);
+        }
+        
+        // Close peer connection for this player
+        const pc = this.peerConnections.get(peerId);
+        if (pc) {
+            try { pc.close(); } catch (e) {}
+            this.peerConnections.delete(peerId);
+        }
+        
+        this.addSystemMessage(`A player left the video call`, 'info');
     }
 
     endVideoCall() {
@@ -829,6 +1045,20 @@ export class Scene extends Phaser.Scene {
     // --- WebRTC Signaling Handlers ---
     setupWebRTCSignaling() {
         if (!this.socket) return;
+
+        // Listen for video call invites
+        this.socket.on('videoCallInvite', (data) => {
+            console.log('Received videoCallInvite:', data);
+            this.showCallInvite(data);
+        });
+        
+        // Listen for video call ended - remove that player's video
+        this.socket.on('videoCallEnded', (data) => {
+            console.log('Player ended video call:', data.from);
+            this.removeRemoteVideo(data.from);
+        });
+        
+        console.log('WebRTC signaling listeners set up');
 
         this.socket.on('webrtc-offer', async ({ offer, from }) => {
             try {

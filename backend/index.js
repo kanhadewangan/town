@@ -178,6 +178,33 @@ io.on("connection", (socket) => {
     });
     
     // --- WebRTC Signaling ---
+    // Handle video call start notification
+    socket.on('videoCallStarted', () => {
+        console.log(`Player ${socket.id.substr(0,6)} started video call in room: ${currentRoom}`);
+        if (currentRoom) {
+            const roomInfo = io.sockets.adapter.rooms.get(currentRoom);
+            const playersInRoom = roomInfo ? roomInfo.size : 0;
+            console.log(`Broadcasting videoCallInvite to ${playersInRoom - 1} other players in room ${currentRoom}`);
+            
+            socket.to(currentRoom).emit('videoCallInvite', {
+                from: socket.id,
+                playerName: socket.id.substr(0, 6),
+                timestamp: Date.now()
+            });
+        }
+    });
+    
+    // Handle video call end notification
+    socket.on('videoCallEnded', () => {
+        console.log(`Player ${socket.id.substr(0,6)} ended video call in room: ${currentRoom}`);
+        if (currentRoom) {
+            socket.to(currentRoom).emit('videoCallEnded', {
+                from: socket.id,
+                playerName: socket.id.substr(0, 6)
+            });
+        }
+    });
+
     socket.on('webrtc-offer', (payload) => {
         // payload: { target, offer, from }
         if (payload && payload.target) {
