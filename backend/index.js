@@ -241,7 +241,7 @@ io.engine.on('connection_error', (err) => {
     console.error('Engine connection_error:', err);
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Multiplayer server listening on *:${PORT}`);
 });

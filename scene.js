@@ -87,7 +87,7 @@ export class Scene extends Phaser.Scene {
 
         // Use localhost for development, remote for production
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const socketUrl = isLocalhost ? "http://localhost:8080" : "https://synarena-api.duckdns.org";
+        const socketUrl = isLocalhost ? "https://api-sync.duckdns.org/" : "https://synarena-api.duckdns.org";
         console.log(`Connecting to socket server: ${socketUrl}`);
         
         socket = io(socketUrl, {
